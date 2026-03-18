@@ -4,6 +4,8 @@ let userController = require('../controllers/users')
 let bcrypt = require('bcrypt');
 const { CheckLogin } = require('../utils/authHandler');
 let jwt = require('jsonwebtoken')
+let { jwtConfig } = require('../utils/constant')
+let { validatedResult, ChangePasswordValidator } = require('../utils/validator')
 router.post('/register', async function (req, res, next) {
     try {
         let { username, password, email } = req.body;
@@ -37,12 +39,9 @@ router.post('/login', async function (req, res, next) {
         if (bcrypt.compareSync(password, user.password)) {
             user.loginCount = 0;
             await user.save()
-            //let priK = fs.readFileSync('privateKey.pem')
             let token = jwt.sign({
                 id: user._id
-            }, 'secret', {
-                expiresIn: '1d'
-            })
+            }, jwtConfig.privateKey, jwtConfig.signOptions)
             res.send(token)
         } else {
             user.loginCount++;
@@ -64,4 +63,28 @@ router.post('/login', async function (req, res, next) {
 router.get('/me', CheckLogin, function (req, res, next) {
     res.send(req.user)
 })
+
+router.post('/change-password', CheckLogin, ChangePasswordValidator, validatedResult, async function (req, res, next) {
+    try {
+        let { oldpassword, newpassword } = req.body;
+        if (!bcrypt.compareSync(oldpassword, req.user.password)) {
+            res.status(400).send({
+                message: 'oldpassword khong dung'
+            })
+            return;
+        }
+
+        req.user.password = newpassword;
+        await req.user.save();
+
+        res.send({
+            message: 'doi mat khau thanh cong'
+        })
+    } catch (error) {
+        res.status(400).send({
+            message: error.message
+        })
+    }
+})
+
 module.exports = router
